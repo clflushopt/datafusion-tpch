@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+datafusion = "46.0.1"
+datafusion-expr = "46.0.1"
+tpchgen = "1.0.0"
+tpchgen-arrow = "1.0.0"
+
+[dev-dependencies]
+tokio = "1.44.2"
