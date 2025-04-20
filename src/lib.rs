@@ -5,32 +5,26 @@ use datafusion_expr::Expr;
 use std::sync::Arc;
 use tpchgen_arrow::{NationArrow, RecordBatchIterator};
 
-/// A Table function that returns a table provider exposing the TPCH
-/// dataset.
-/// The function takes a single argument, which is an integer value
-/// representing the dataset scale factor.
+/// Table function that returns the TPCH nation table.
 #[derive(Debug)]
-pub struct TpchgenFunction {}
+pub struct TpchNationFunction {}
 
-impl TableFunctionImpl for TpchgenFunction {
-    fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
-        let Some(Expr::Literal(ScalarValue::Float64(Some(value)))) = exprs.get(0) else {
+impl TableFunctionImpl for TpchNationFunction {
+    fn call(&self, args: &[Expr]) -> Result<Arc<dyn TableProvider>> {
+        let Some(Expr::Literal(ScalarValue::Float64(Some(value)))) = args.get(0) else {
             return plan_err!("First argument must be a float literal.");
         };
 
-        // Create a list of tuples mapping the TPCH table names to their corresponding
-        // schemas.
-        let tables = vec![(
-            "nation",
-            tpchgen::generators::NationGenerator::new(*value, 0, 0),
-        )];
+        // Init the table generator.
+        let tablegen = tpchgen::generators::NationGenerator::new(*value, 0, 0);
 
-        // Create a single RecordBatch with the value as a single column
-        let mut table_arrow_gen = NationArrow::new(tables[0].1.clone());
-        let batch = table_arrow_gen.next().unwrap();
+        // Init the arrow provider.
+        let mut arrow_tablegen = NationArrow::new(tablegen);
 
-        // Create a MemTable plan that returns the RecordBatch
-        let provider = MemTable::try_new(table_arrow_gen.schema().clone(), vec![vec![batch]])?;
+        let batch = arrow_tablegen.next().unwrap();
+
+        // Build the memtable plan.
+        let provider = MemTable::try_new(arrow_tablegen.schema().clone(), vec![vec![batch]])?;
 
         Ok(Arc::new(provider))
     }
@@ -44,10 +38,10 @@ mod tests {
     #[tokio::test]
     async fn test_tpchgen_function() -> Result<()> {
         let ctx = SessionContext::new();
-        ctx.register_udtf("tpchgen", Arc::new(TpchgenFunction {}));
+        ctx.register_udtf("tpchgen_nation", Arc::new(TpchNationFunction {}));
 
         let df = ctx
-            .sql("SELECT * FROM tpchgen(1.0)")
+            .sql("SELECT * FROM tpchgen_nation(1.0)")
             .await?
             .collect()
             .await?;
