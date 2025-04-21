@@ -1,3 +1,4 @@
+use datafusion::arrow::compute::concat_batches;
 use datafusion::catalog::{TableFunctionImpl, TableProvider};
 use datafusion::common::{Result, ScalarValue, plan_err};
 use datafusion::datasource::memory::MemTable;
@@ -5,30 +6,156 @@ use datafusion_expr::Expr;
 use std::sync::Arc;
 use tpchgen_arrow::{NationArrow, RecordBatchIterator};
 
-/// Table function that returns the TPCH nation table.
-#[derive(Debug)]
-pub struct TpchNationFunction {}
+/// Defines a table function provider and its implementation using [`tpchgen`]
+/// as the data source.
+macro_rules! define_tpch_udtf_provider {
+    ($TABLE_FUNCTION_NAME:ident, $TABLE_FUNCTION_SQL_NAME:ident, $GENERATOR:ty, $ARROW_GENERATOR:ty) => {
+        /// Tablle Function that returns the $TABLE_FUNCTION_NAME table.
+        ///
+        /// This function is a wrapper around the [`tpchgen`] library and builds
+        /// a table provider that can be used in a DataFusion query.
+        ///
+        /// The expected arguments are a float literal for the scale factor,
+        /// an i64 literal for the part, and an i64 literal for the number of parts.
+        /// The second and third arguments are optional and will default to 1
+        /// for both values which tells the generator to generate all parts.
+        ///
+        /// # Examples
+        ///
+        /// -- This example generates TPCH nation data with scale factor 1.0.
+        /// SELECT * FROM tpchgen_nation(1.0);
+        ///
+        /// -- This example generates TPCH order data with scale factor 10 and generates
+        /// -- the second part with 5 parts.
+        /// SELECT * FROM tpchgen_order(10.0, 2, 5);
+        #[derive(Debug)]
+        pub struct $TABLE_FUNCTION_NAME {}
 
-impl TableFunctionImpl for TpchNationFunction {
-    fn call(&self, args: &[Expr]) -> Result<Arc<dyn TableProvider>> {
-        let Some(Expr::Literal(ScalarValue::Float64(Some(value)))) = args.get(0) else {
-            return plan_err!("First argument must be a float literal.");
-        };
+        impl $TABLE_FUNCTION_NAME {
+            /// Returns the name of the table function.
+            pub fn name() -> &'static str {
+                stringify!($TABLE_FUNCTION_SQL_NAME)
+            }
+        }
 
-        // Init the table generator.
-        let tablegen = tpchgen::generators::NationGenerator::new(*value, 0, 0);
+        impl TableFunctionImpl for $TABLE_FUNCTION_NAME {
+            /// Implementation of the UDTF invocation for TPCH table generation
+            /// using the [`tpchgen`] library.
+            ///
+            /// The first argument is a float literal that specifies the scale factor.
+            /// The second argument is the part to generate.
+            /// The third argument is the number of parts to generate.
+            ///
+            /// The second and third argument are optional and will default to 1
+            /// for both values which tells the generator to generate all parts.
+            fn call(&self, args: &[Expr]) -> Result<Arc<dyn TableProvider>> {
+                let Some(Expr::Literal(ScalarValue::Float64(Some(value)))) = args.get(0) else {
+                    return plan_err!("First argument must be a float literal.");
+                };
 
-        // Init the arrow provider.
-        let mut arrow_tablegen = NationArrow::new(tablegen);
+                // Default values for part and num_parts.
+                let part = 1;
+                let num_parts = 1;
 
-        let batch = arrow_tablegen.next().unwrap();
+                // Check if we have more arguments `part` and `num_parts` respectively
+                // and if they are i64 literals.
+                if args.len() > 1 {
+                    // Check if the second argument and third arguments are i64 literals and
+                    // greater than 0.
+                    let Some(Expr::Literal(ScalarValue::Int64(Some(part)))) = args.get(1) else {
+                        return plan_err!("Second argument must be an i64 literal.");
+                    };
+                    let Some(Expr::Literal(ScalarValue::Int64(Some(num_parts)))) = args.get(2)
+                    else {
+                        return plan_err!("Third argument must be an i64 literal.");
+                    };
+                    if *part < 0 || *num_parts < 0 {
+                        return plan_err!("Second and third arguments must be greater than 0.");
+                    }
+                }
 
-        // Build the memtable plan.
-        let provider = MemTable::try_new(arrow_tablegen.schema().clone(), vec![vec![batch]])?;
+                // Init the table generator.
+                let tablegen = <$GENERATOR>::new(*value, part, num_parts);
 
-        Ok(Arc::new(provider))
-    }
+                // Init the arrow provider.
+                let mut arrow_tablegen = <$ARROW_GENERATOR>::new(tablegen);
+
+                // The arrow provider is a batched generator with a default batch size of 8000
+                // so to build the full table we need to call `next` until it returns None.
+                let mut batches = Vec::new();
+                while let Some(batch) = arrow_tablegen.next() {
+                    batches.push(batch);
+                }
+                // Use `concat_batches` to create a single batch from the vector of batches.
+                // This is needed because the `MemTable` provider requires a single batch.
+                // This is a bit of a hack, but it works.
+                let batch = concat_batches(arrow_tablegen.schema(), &batches)?;
+
+                // Build the memtable plan.
+                let provider =
+                    MemTable::try_new(arrow_tablegen.schema().clone(), vec![vec![batch]])?;
+
+                Ok(Arc::new(provider))
+            }
+        }
+    };
 }
+
+define_tpch_udtf_provider!(
+    TpchNation,
+    tpch_nation,
+    tpchgen::generators::NationGenerator,
+    NationArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchCustomer,
+    tpch_customer,
+    tpchgen::generators::CustomerGenerator,
+    tpchgen_arrow::CustomerArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchOrders,
+    tpch_orders,
+    tpchgen::generators::OrderGenerator,
+    tpchgen_arrow::OrderArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchLineitem,
+    tpch_lineitem,
+    tpchgen::generators::LineItemGenerator,
+    tpchgen_arrow::LineItemArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchPart,
+    tpch_part,
+    tpchgen::generators::PartGenerator,
+    tpchgen_arrow::PartArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchPartsupp,
+    tpch_partsupp,
+    tpchgen::generators::PartSuppGenerator,
+    tpchgen_arrow::PartSuppArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchSupplier,
+    tpch_supplier,
+    tpchgen::generators::SupplierGenerator,
+    tpchgen_arrow::SupplierArrow
+);
+
+define_tpch_udtf_provider!(
+    TpchRegion,
+    tpch_region,
+    tpchgen::generators::RegionGenerator,
+    tpchgen_arrow::RegionArrow
+);
 
 #[cfg(test)]
 mod tests {
@@ -36,19 +163,55 @@ mod tests {
     use datafusion::execution::context::SessionContext;
 
     #[tokio::test]
-    async fn test_tpchgen_function() -> Result<()> {
+    async fn test_tpch_functions() -> Result<()> {
         let ctx = SessionContext::new();
-        ctx.register_udtf("tpchgen_nation", Arc::new(TpchNationFunction {}));
 
-        let df = ctx
-            .sql("SELECT * FROM tpchgen_nation(1.0)")
-            .await?
-            .collect()
-            .await?;
+        // Register all the UDTFs.
+        ctx.register_udtf(TpchNation::name(), Arc::new(TpchNation {}));
+        ctx.register_udtf(TpchCustomer::name(), Arc::new(TpchCustomer {}));
+        ctx.register_udtf(TpchOrders::name(), Arc::new(TpchOrders {}));
+        ctx.register_udtf(TpchLineitem::name(), Arc::new(TpchLineitem {}));
+        ctx.register_udtf(TpchPart::name(), Arc::new(TpchPart {}));
+        ctx.register_udtf(TpchPartsupp::name(), Arc::new(TpchPartsupp {}));
+        ctx.register_udtf(TpchSupplier::name(), Arc::new(TpchSupplier {}));
+        ctx.register_udtf(TpchRegion::name(), Arc::new(TpchRegion {}));
 
-        assert_eq!(df.len(), 1);
-        assert_eq!(df[0].num_rows(), 25);
-        assert_eq!(df[0].num_columns(), 4);
+        // Test all the UDTFs, the constants were computed using the tpchgen library
+        // and the expected values are the number of rows and columns for each table.
+        let test_cases = vec![
+            (TpchNation::name(), 25, 4),
+            (TpchCustomer::name(), 150000, 8),
+            (TpchOrders::name(), 1500000, 9),
+            (TpchLineitem::name(), 6001215, 16),
+            (TpchPart::name(), 200000, 9),
+            (TpchPartsupp::name(), 800000, 5),
+            (TpchSupplier::name(), 10000, 7),
+            (TpchRegion::name(), 5, 3),
+        ];
+
+        for (function, expected_rows, expected_columns) in test_cases {
+            let df = ctx
+                .sql(&format!("SELECT * FROM {}(1.0)", function))
+                .await?
+                .collect()
+                .await?;
+
+            assert_eq!(df.len(), 1);
+            assert_eq!(
+                df[0].num_rows(),
+                expected_rows,
+                "{}: {}",
+                function,
+                expected_rows
+            );
+            assert_eq!(
+                df[0].num_columns(),
+                expected_columns,
+                "{}: {}",
+                function,
+                expected_columns
+            );
+        }
         Ok(())
     }
 }
