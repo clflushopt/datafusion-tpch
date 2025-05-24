@@ -67,3 +67,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+## License
+
+The project is licensed under the [APACHE 2.0](LICENSE) license.
