@@ -18,6 +18,8 @@ using the [tpchgen](https://github.com/clflushopt/tpchgen-rs) crates.
 The `datafusion-tpch` crate offers two possible ways to register the TPCH individual
 table functions.
 
+You can register functions individually.
+
 ```rust
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,3 +45,25 @@ async fn main() -> Result<()> {
 }
 ```
 
+Or use the helper function `register_tpch_udtfs` to register all of them
+at once (which is the preferred approach).
+
+```rust
+use datafusion_tpch::register_tpch_udtfs;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // create local execution context
+    let ctx = SessionContext::new();
+
+    // Register all the UDTFs.
+    register_tpch_udtfs(&ctx);
+
+    // Generate the nation table with a scale factor of 1.
+    let df = ctx
+        .sql(format!("SELECT * FROM tpch_nation(1.0);").as_str())
+        .await?;
+    df.show().await?;
+    Ok(())
+}
+```
