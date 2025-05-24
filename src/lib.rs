@@ -12,10 +12,10 @@ use tpchgen_arrow::RecordBatchIterator;
 macro_rules! define_tpch_udtf_provider {
     ($TABLE_FUNCTION_NAME:ident, $TABLE_FUNCTION_SQL_NAME:ident, $GENERATOR:ty, $ARROW_GENERATOR:ty) => {
         #[doc = concat!(
-                                            "A table function that generates the `",
-                                            stringify!($TABLE_FUNCTION_SQL_NAME),
-                                            "` table using the `tpchgen` library."
-                                        )]
+                                                            "A table function that generates the `",
+                                                            stringify!($TABLE_FUNCTION_SQL_NAME),
+                                                            "` table using the `tpchgen` library."
+                                                        )]
         ///
         /// The expected arguments are a float literal for the scale factor,
         /// an i64 literal for the part, and an i64 literal for the number of parts.
@@ -24,11 +24,16 @@ macro_rules! define_tpch_udtf_provider {
         ///
         /// # Examples
         /// ```
+        /// use std::sync::Arc;
+        /// use std::io::Error;
+        ///
+        /// use datafusion::prelude::*;
+        /// use datafusion_tpch::*;
+        ///
         /// #[tokio::main]
-        /// async fn main() -> Result<()> {
+        /// async fn main() -> Result<(), Error> {
         ///     // create local execution context
         ///     let ctx = SessionContext::new();
-
         ///     // Register all the UDTFs.
         ///     ctx.register_udtf(TpchNation::name(), Arc::new(TpchNation {}));
         ///     ctx.register_udtf(TpchCustomer::name(), Arc::new(TpchCustomer {}));
