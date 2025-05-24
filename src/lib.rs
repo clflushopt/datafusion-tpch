@@ -4,7 +4,7 @@ use datafusion::common::{Result, ScalarValue, plan_err};
 use datafusion::datasource::memory::MemTable;
 use datafusion_expr::Expr;
 use std::sync::Arc;
-use tpchgen_arrow::{NationArrow, RecordBatchIterator};
+use tpchgen_arrow::RecordBatchIterator;
 
 /// Defines a table function provider and its implementation using [`tpchgen`]
 /// as the data source.
@@ -81,7 +81,7 @@ macro_rules! define_tpch_udtf_provider {
                 let mut arrow_tablegen = <$ARROW_GENERATOR>::new(tablegen);
 
                 // The arrow provider is a batched generator with a default batch size of 8000
-                // so to build the full table we need to call `next` until it returns None.
+                // so to build the full table we need to drain it completely.
                 let mut batches = Vec::new();
                 while let Some(batch) = arrow_tablegen.next() {
                     batches.push(batch);
@@ -105,7 +105,7 @@ define_tpch_udtf_provider!(
     TpchNation,
     tpch_nation,
     tpchgen::generators::NationGenerator,
-    NationArrow
+    tpchgen_arrow::NationArrow
 );
 
 define_tpch_udtf_provider!(
