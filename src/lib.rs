@@ -2,6 +2,7 @@ use datafusion::arrow::compute::concat_batches;
 use datafusion::catalog::{TableFunctionImpl, TableProvider};
 use datafusion::common::{Result, ScalarValue, plan_err};
 use datafusion::datasource::memory::MemTable;
+use datafusion::prelude::SessionContext;
 use datafusion_expr::Expr;
 use std::sync::Arc;
 use tpchgen_arrow::RecordBatchIterator;
@@ -10,10 +11,11 @@ use tpchgen_arrow::RecordBatchIterator;
 /// as the data source.
 macro_rules! define_tpch_udtf_provider {
     ($TABLE_FUNCTION_NAME:ident, $TABLE_FUNCTION_SQL_NAME:ident, $GENERATOR:ty, $ARROW_GENERATOR:ty) => {
-        /// Tablle Function that returns the $TABLE_FUNCTION_NAME table.
-        ///
-        /// This function is a wrapper around the [`tpchgen`] library and builds
-        /// a table provider that can be used in a DataFusion query.
+        #[doc = concat!(
+                                            "A table function that generates the `",
+                                            stringify!($TABLE_FUNCTION_SQL_NAME),
+                                            "` table using the `tpchgen` library."
+                                        )]
         ///
         /// The expected arguments are a float literal for the scale factor,
         /// an i64 literal for the part, and an i64 literal for the number of parts.
@@ -21,13 +23,29 @@ macro_rules! define_tpch_udtf_provider {
         /// for both values which tells the generator to generate all parts.
         ///
         /// # Examples
-        ///
-        /// -- This example generates TPCH nation data with scale factor 1.0.
-        /// SELECT * FROM tpchgen_nation(1.0);
-        ///
-        /// -- This example generates TPCH order data with scale factor 10 and generates
-        /// -- the second part with 5 parts.
-        /// SELECT * FROM tpchgen_order(10.0, 2, 5);
+        /// ```
+        /// #[tokio::main]
+        /// async fn main() -> Result<()> {
+        ///     // create local execution context
+        ///     let ctx = SessionContext::new();
+
+        ///     // Register all the UDTFs.
+        ///     ctx.register_udtf(TpchNation::name(), Arc::new(TpchNation {}));
+        ///     ctx.register_udtf(TpchCustomer::name(), Arc::new(TpchCustomer {}));
+        ///     ctx.register_udtf(TpchOrders::name(), Arc::new(TpchOrders {}));
+        ///     ctx.register_udtf(TpchLineitem::name(), Arc::new(TpchLineitem {}));
+        ///     ctx.register_udtf(TpchPart::name(), Arc::new(TpchPart {}));
+        ///     ctx.register_udtf(TpchPartsupp::name(), Arc::new(TpchPartsupp {}));
+        ///     ctx.register_udtf(TpchSupplier::name(), Arc::new(TpchSupplier {}));
+        ///     ctx.register_udtf(TpchRegion::name(), Arc::new(TpchRegion {}));
+        ///     // Generate the nation table with a scale factor of 1.
+        ///     let df = ctx
+        ///         .sql(format!("SELECT * FROM tpch_nation(1.0);").as_str())
+        ///         .await?;
+        ///     df.show().await?;
+        ///     Ok(())
+        /// }
+        /// ```
         #[derive(Debug)]
         pub struct $TABLE_FUNCTION_NAME {}
 
@@ -157,13 +175,73 @@ define_tpch_udtf_provider!(
     tpchgen_arrow::RegionArrow
 );
 
+/// Registers all the TPCH UDTFs in the given session context.
+pub fn register_tpch_udtfs(ctx: &SessionContext) -> Result<()> {
+    ctx.register_udtf(TpchNation::name(), Arc::new(TpchNation {}));
+    ctx.register_udtf(TpchCustomer::name(), Arc::new(TpchCustomer {}));
+    ctx.register_udtf(TpchOrders::name(), Arc::new(TpchOrders {}));
+    ctx.register_udtf(TpchLineitem::name(), Arc::new(TpchLineitem {}));
+    ctx.register_udtf(TpchPart::name(), Arc::new(TpchPart {}));
+    ctx.register_udtf(TpchPartsupp::name(), Arc::new(TpchPartsupp {}));
+    ctx.register_udtf(TpchSupplier::name(), Arc::new(TpchSupplier {}));
+    ctx.register_udtf(TpchRegion::name(), Arc::new(TpchRegion {}));
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use datafusion::execution::context::SessionContext;
 
     #[tokio::test]
-    async fn test_tpch_functions() -> Result<()> {
+    async fn test_register_all_tpch_functions() -> Result<()> {
+        let ctx = SessionContext::new();
+
+        // Register all the UDTFs.
+        register_tpch_udtfs(&ctx)?;
+
+        // Test all the UDTFs, the constants were computed using the tpchgen library
+        // and the expected values are the number of rows and columns for each table.
+        let test_cases = vec![
+            (TpchNation::name(), 25, 4),
+            (TpchCustomer::name(), 150000, 8),
+            (TpchOrders::name(), 1500000, 9),
+            (TpchLineitem::name(), 6001215, 16),
+            (TpchPart::name(), 200000, 9),
+            (TpchPartsupp::name(), 800000, 5),
+            (TpchSupplier::name(), 10000, 7),
+            (TpchRegion::name(), 5, 3),
+        ];
+
+        for (function, expected_rows, expected_columns) in test_cases {
+            let df = ctx
+                .sql(&format!("SELECT * FROM {}(1.0)", function))
+                .await?
+                .collect()
+                .await?;
+
+            assert_eq!(df.len(), 1);
+            assert_eq!(
+                df[0].num_rows(),
+                expected_rows,
+                "{}: {}",
+                function,
+                expected_rows
+            );
+            assert_eq!(
+                df[0].num_columns(),
+                expected_columns,
+                "{}: {}",
+                function,
+                expected_columns
+            );
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_register_individual_tpch_functions() -> Result<()> {
         let ctx = SessionContext::new();
 
         // Register all the UDTFs.
