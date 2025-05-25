@@ -207,6 +207,93 @@ impl TpchTables {
     pub fn new(ctx: SessionContext) -> Self {
         Self { ctx }
     }
+
+    /// Build and register the TPCH nation table in the session context.
+    fn build_and_register_nation(&self, scale_factor: f64) -> Result<()> {
+        let nation_provider = TpchNation {};
+        let nation_table = nation_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_nation"), nation_table)?;
+        Ok(())
+    }
+
+    /// Build and register the TPCH customer table in the session context.
+    fn build_and_register_customer(&self, scale_factor: f64) -> Result<()> {
+        let customer_provider = TpchCustomer {};
+        let customer_table = customer_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_customer"), customer_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH orders table in the session context.
+    fn build_and_register_orders(&self, scale_factor: f64) -> Result<()> {
+        let orders_provider = TpchOrders {};
+        let orders_table = orders_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_orders"), orders_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH lineitem table in the session context.
+    fn build_and_register_lineitem(&self, scale_factor: f64) -> Result<()> {
+        let lineitem_provider = TpchLineitem {};
+        let lineitem_table = lineitem_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_lineitem"), lineitem_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH part table in the session context.
+    fn build_and_register_part(&self, scale_factor: f64) -> Result<()> {
+        let part_provider = TpchPart {};
+        let part_table = part_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_part"), part_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH partsupp table in the session context.
+    fn build_and_register_partsupp(&self, scale_factor: f64) -> Result<()> {
+        let partsupp_provider = TpchPartsupp {};
+        let partsupp_table = partsupp_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_partsupp"), partsupp_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH supplier table in the session context.
+    fn build_and_register_supplier(&self, scale_factor: f64) -> Result<()> {
+        let supplier_provider = TpchSupplier {};
+        let supplier_table = supplier_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_supplier"), supplier_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH region table in the session context.
+    fn build_and_register_region(&self, scale_factor: f64) -> Result<()> {
+        let region_provider = TpchRegion {};
+        let region_table = region_provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare("tpch_region"), region_table)?;
+        Ok(())
+    }
+    /// Build and register the TPCH tables in the session context.
+    fn build_and_register_tables(&self, scale_factor: f64) -> Result<()> {
+        self.build_and_register_nation(scale_factor)?;
+        self.build_and_register_customer(scale_factor)?;
+        self.build_and_register_orders(scale_factor)?;
+        self.build_and_register_lineitem(scale_factor)?;
+        self.build_and_register_part(scale_factor)?;
+        self.build_and_register_partsupp(scale_factor)?;
+        self.build_and_register_supplier(scale_factor)?;
+        self.build_and_register_region(scale_factor)?;
+
+        Ok(())
+    }
 }
 
 // Implement the `TableProvider` trait for the `TpchTableProvider`, we need
@@ -242,50 +329,9 @@ impl TableFunctionImpl for TpchTables {
 
         // Short path when `write_to_disk` is false or `path` is empty.
         if !write_to_disk || path.is_empty() {
-            //// Start with nation table.
-            let nation_provider = TpchNation {};
-            let nation_table = nation_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            //// Register the table in the session context.
-            self.ctx
-                .register_table(TableReference::bare("tpch_nation"), nation_table)?;
+            // Register the TPCH tables in the session context.
+            self.build_and_register_tables(scale_factor)?;
 
-            // Register the rest of the tables in the session context.
-            let customer_provider = TpchCustomer {};
-            let customer_table = customer_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_customer"), customer_table)?;
-            let orders_provider = TpchOrders {};
-            let orders_table = orders_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_orders"), orders_table)?;
-            let lineitem_provider = TpchLineitem {};
-            let lineitem_table = lineitem_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_lineitem"), lineitem_table)?;
-            let part_provider = TpchPart {};
-            let part_table = part_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_part"), part_table)?;
-            let partsupp_provider = TpchPartsupp {};
-            let partsupp_table = partsupp_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_partsupp"), partsupp_table)?;
-            let supplier_provider = TpchSupplier {};
-            let supplier_table = supplier_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_supplier"), supplier_table)?;
-            let region_provider = TpchRegion {};
-            let region_table = region_provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare("tpch_region"), region_table)?;
             // Create a table with the schema |table_name| and the data is just the
             // individual table names.
             let schema = Schema::new(vec![datafusion::arrow::datatypes::Field::new(
