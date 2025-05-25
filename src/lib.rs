@@ -197,11 +197,12 @@ pub fn register_tpch_udtfs(ctx: &SessionContext) -> Result<()> {
     Ok(())
 }
 
-struct TpchTableProvider {
+/// Table function provider for TPCH tables.
+struct TpchTables {
     ctx: SessionContext,
 }
 
-impl TpchTableProvider {
+impl TpchTables {
     /// Creates a new TPCH table provider.
     pub fn new(ctx: SessionContext) -> Self {
         Self { ctx }
@@ -210,13 +211,13 @@ impl TpchTableProvider {
 
 // Implement the `TableProvider` trait for the `TpchTableProvider`, we need
 // to do it manually because the `SessionContext` does not implement it.
-impl Debug for TpchTableProvider {
+impl Debug for TpchTables {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TpchTableProvider")
     }
 }
 
-impl TableFunctionImpl for TpchTableProvider {
+impl TableFunctionImpl for TpchTables {
     /// The `call` method is the entry point for the UDTF and is called when the UDTF is
     /// invoked in a SQL query.
     ///
@@ -285,7 +286,6 @@ impl TableFunctionImpl for TpchTableProvider {
                 .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
             self.ctx
                 .register_table(TableReference::bare("tpch_region"), region_table)?;
-
             // Create a table with the schema |table_name| and the data is just the
             // individual table names.
             let schema = Schema::new(vec![datafusion::arrow::datatypes::Field::new(
@@ -327,7 +327,7 @@ mod tests {
     async fn test_register_all_tpch_functions() -> Result<()> {
         let ctx = SessionContext::new();
 
-        let tpch_tbl_fn = TpchTableProvider::new(ctx.clone());
+        let tpch_tbl_fn = TpchTables::new(ctx.clone());
         ctx.register_udtf("tcph", Arc::new(tpch_tbl_fn));
 
         // Register all the UDTFs.
@@ -430,7 +430,7 @@ mod tests {
         let ctx = SessionContext::new();
 
         // Register the TPCH provider.
-        let tpch_provider = TpchTableProvider::new(ctx.clone());
+        let tpch_provider = TpchTables::new(ctx.clone());
         ctx.register_udtf("tpch", Arc::new(tpch_provider));
 
         // Test the TPCH provider.
