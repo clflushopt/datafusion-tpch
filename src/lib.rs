@@ -226,86 +226,41 @@ impl TpchTables {
         provider: P,
         table_name: &str,
         scale_factor: f64,
-        write_to_disk: bool,
-        _path: &str,
     ) -> Result<()> {
-        // Short path when the table is generated in memory only.
-        if !write_to_disk {
-            let table = provider
-                .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
-            self.ctx
-                .register_table(TableReference::bare(table_name), table)?;
-            return Ok(());
-        }
+        let table = provider
+            .call(vec![Expr::Literal(ScalarValue::Float64(Some(scale_factor)))].as_slice())?;
+        self.ctx
+            .register_table(TableReference::bare(table_name), table)?;
 
         Ok(())
     }
 
     /// Build and register all TPCH tables in the session context.
-    fn build_and_register_all_tables(
-        &self,
-        scale_factor: f64,
-        write_to_disk: bool,
-        path: &str,
-    ) -> Result<()> {
+    fn build_and_register_all_tables(&self, scale_factor: f64) -> Result<()> {
         for &suffix in Self::TPCH_TABLE_NAMES {
             match suffix {
-                "nation" => self.build_and_register_tpch_table(
-                    TpchNation {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "customer" => self.build_and_register_tpch_table(
-                    TpchCustomer {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "orders" => self.build_and_register_tpch_table(
-                    TpchOrders {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "lineitem" => self.build_and_register_tpch_table(
-                    TpchLineitem {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "part" => self.build_and_register_tpch_table(
-                    TpchPart {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "partsupp" => self.build_and_register_tpch_table(
-                    TpchPartsupp {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "supplier" => self.build_and_register_tpch_table(
-                    TpchSupplier {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
-                "region" => self.build_and_register_tpch_table(
-                    TpchRegion {},
-                    suffix,
-                    scale_factor,
-                    write_to_disk,
-                    path,
-                )?,
+                "nation" => {
+                    self.build_and_register_tpch_table(TpchNation {}, suffix, scale_factor)?
+                }
+                "customer" => {
+                    self.build_and_register_tpch_table(TpchCustomer {}, suffix, scale_factor)?
+                }
+                "orders" => {
+                    self.build_and_register_tpch_table(TpchOrders {}, suffix, scale_factor)?
+                }
+                "lineitem" => {
+                    self.build_and_register_tpch_table(TpchLineitem {}, suffix, scale_factor)?
+                }
+                "part" => self.build_and_register_tpch_table(TpchPart {}, suffix, scale_factor)?,
+                "partsupp" => {
+                    self.build_and_register_tpch_table(TpchPartsupp {}, suffix, scale_factor)?
+                }
+                "supplier" => {
+                    self.build_and_register_tpch_table(TpchSupplier {}, suffix, scale_factor)?
+                }
+                "region" => {
+                    self.build_and_register_tpch_table(TpchRegion {}, suffix, scale_factor)?
+                }
                 _ => unreachable!("Unknown TPCH table suffix: {}", suffix), // Should not happen
             }
         }
@@ -325,27 +280,21 @@ impl TableFunctionImpl for TpchTables {
     /// The `call` method is the entry point for the UDTF and is called when the UDTF is
     /// invoked in a SQL query.
     ///
-    /// It takes a list of arguments, the scale factor, whether to generate the data on
-    /// disk in parquet format and the path to the output files. If no path is provided,
-    /// the data is generated in memory and we fallback to the `MemTable` provider.
+    /// The UDF requires one argument, the scale factor, and allows a second optional
+    /// argument which is a path on disk. If a path is specified, the data is flushed
+    /// to disk from the generated memory table.
     fn call(&self, args: &[Expr]) -> Result<Arc<dyn TableProvider>> {
         let scale_factor = match args.first() {
             Some(Expr::Literal(ScalarValue::Float64(Some(value)))) => *value,
-            _ => return plan_err!("First argument must be a float literal."),
-        };
-
-        let write_to_disk = match args.get(1) {
-            Some(Expr::Literal(ScalarValue::Boolean(Some(value)))) => *value,
-            _ => false,
-        };
-
-        let path = match args.get(2) {
-            Some(Expr::Literal(ScalarValue::Utf8(Some(value)))) => value.clone(),
-            _ => "".to_string(),
+            _ => {
+                return plan_err!(
+                    "First argument must be a float literal that specifies the scale factor."
+                );
+            }
         };
 
         // Register the TPCH tables in the session context.
-        self.build_and_register_all_tables(scale_factor, write_to_disk, &path)?;
+        self.build_and_register_all_tables(scale_factor)?;
 
         // Create a table with the schema |table_name| and the data is just the
         // individual table names.
@@ -488,7 +437,7 @@ mod tests {
 
         // Test the TPCH provider.
         let df = ctx
-            .sql("SELECT * FROM tpch(1.0, false, '')")
+            .sql("SELECT * FROM tpch(1.0, '')")
             .await?
             .collect()
             .await?;
