@@ -33,15 +33,8 @@ macro_rules! define_tpch_udtf_provider {
         /// async fn main() -> Result<(), Error> {
         ///     // create local execution context
         ///     let ctx = SessionContext::new();
-        ///     // Register all the UDTFs.
-        ///     ctx.register_udtf(TpchNation::name(), Arc::new(TpchNation {}));
-        ///     ctx.register_udtf(TpchCustomer::name(), Arc::new(TpchCustomer {}));
-        ///     ctx.register_udtf(TpchOrders::name(), Arc::new(TpchOrders {}));
-        ///     ctx.register_udtf(TpchLineitem::name(), Arc::new(TpchLineitem {}));
-        ///     ctx.register_udtf(TpchPart::name(), Arc::new(TpchPart {}));
-        ///     ctx.register_udtf(TpchPartsupp::name(), Arc::new(TpchPartsupp {}));
-        ///     ctx.register_udtf(TpchSupplier::name(), Arc::new(TpchSupplier {}));
-        ///     ctx.register_udtf(TpchRegion::name(), Arc::new(TpchRegion {}));
+        ///     // Register all udtfs.
+        ///     register_tpch_udtfs(&ctx);
         ///     // Generate the nation table with a scale factor of 1.
         ///     let df = ctx
         ///         .sql(format!("SELECT * FROM tpch_nation(1.0);").as_str())
