@@ -1,6 +1,5 @@
 //! Example of using the datafusion-tpch extension to generate TPCH tables
 //! and writing them to disk via `COPY`.
-
 use datafusion::prelude::{SessionConfig, SessionContext};
 use datafusion_tpch::{register_tpch_udtf, register_tpch_udtfs};
 
