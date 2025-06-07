@@ -107,7 +107,7 @@ You can find other examples in the [examples](examples/) directory.
 
 ## Running Examples
 
-To quickly see the Parquet integration in action, you can run the provided example directly from your terminal:
+To quickly see the Parquet example in action, you can run the provided example directly from your terminal:
 
 ```bash
 cargo run --example parquet
