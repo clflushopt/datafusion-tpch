@@ -105,6 +105,14 @@ async fn main() -> datafusion::error::Result<()> {
 
 You can find other examples in the [examples](examples/) directory.
 
+## Running Examples
+
+To quickly see the Parquet integration in action, you can run the provided example directly from your terminal:
+
+```bash
+cargo run --example parquet
+```
+
 ## License
 
 The project is licensed under the [APACHE 2.0](LICENSE) license.
