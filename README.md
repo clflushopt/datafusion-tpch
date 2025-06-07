@@ -105,7 +105,7 @@ async fn main() -> datafusion::error::Result<()> {
 
 You can find other examples in the [examples](examples/) directory.
 
-## Running Examples
+### Running Examples
 
 To quickly see the Parquet example in action, you can run the provided example directly from your terminal:
 
